@@ -1,1 +1,190 @@
 
+# TASK 12 - Re-evaluate and Adapt the Design
+# Milk Price Calculation System
+
+from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
+
+# -----------------------------------------
+# A. CONSTANTS
+# -----------------------------------------
+
+NEW_BASE_RATE = Decimal("32.00")
+FAT_STEP_RATE = Decimal("0.45")
+BONUS_RATE = Decimal("0.50")
+BONUS_LIMIT = Decimal("500.00")
+
+# Assumed interpretation:
+# Each 1.00 percentage-point of FAT is one fat step.
+# SNF is recorded to two decimal places but is not
+# included in the price because no SNF rate is supplied.
+
+
+# -----------------------------------------
+# B. SEASONAL RATE FUNCTION
+# -----------------------------------------
+
+def get_rate_card(month):
+    """Select the applicable seasonal rate card."""
+
+    if 4 <= month <= 6:
+        return NEW_BASE_RATE, FAT_STEP_RATE
+
+    # Original-season rates must be supplied here.
+    # They were not specified in the changed requirement.
+    raise ValueError(
+        "Original rate card is required for this season."
+    )
+
+
+# -----------------------------------------
+# C. MILK PRICE CALCULATION
+# -----------------------------------------
+
+def calculate_milk_rate(fat, snf, month):
+
+    # Convert readings to two decimal places
+    fat = Decimal(str(fat)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    snf = Decimal(str(snf)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+    if not (Decimal("0") <= fat <= Decimal("100")):
+        raise ValueError("Invalid FAT reading.")
+
+    if not (Decimal("0") <= snf <= Decimal("100")):
+        raise ValueError("Invalid SNF reading.")
+
+    base_rate, fat_step_rate = get_rate_card(month)
+
+    # One FAT percentage point = one fat step
+    fat_steps = fat
+
+    milk_rate = base_rate + (fat_steps * fat_step_rate)
+
+    return milk_rate.quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+# -----------------------------------------
+# D. FARMER BONUS FUNCTION
+# -----------------------------------------
+
+def calculate_bonus(total_litres):
+
+    total_litres = Decimal(str(total_litres))
+
+    if total_litres > BONUS_LIMIT:
+        bonus = total_litres * BONUS_RATE
+    else:
+        bonus = Decimal("0.00")
+
+    return bonus.quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+# -----------------------------------------
+# E. COMPLETE PAYMENT FUNCTION
+# -----------------------------------------
+
+def calculate_payment(fat, snf, litres,
+                      total_10_day_litres, month):
+
+    milk_rate = calculate_milk_rate(fat, snf, month)
+
+    litres = Decimal(str(litres))
+
+    milk_amount = milk_rate * litres
+
+    bonus_per_litre = (
+        BONUS_RATE
+        if Decimal(str(total_10_day_litres)) > BONUS_LIMIT
+        else Decimal("0.00")
+    )
+
+    bonus_amount = litres * bonus_per_litre
+
+    total_payment = milk_amount + bonus_amount
+
+    return {
+        "FAT": fat,
+        "SNF": snf,
+        "Milk Rate": milk_rate,
+        "Milk Amount": milk_amount.quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        ),
+        "Bonus": bonus_amount.quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        ),
+        "Total Payment": total_payment.quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+    }
+
+
+# -----------------------------------------
+# F. TESTING THE REVISED DESIGN
+# -----------------------------------------
+
+def run_tests():
+
+    print("MILK PRICE CALCULATION SYSTEM")
+    print("--------------------------------")
+
+    # Test 1: April - June seasonal rate
+    result = calculate_payment(
+        fat=4.25,
+        snf=8.65,
+        litres=100,
+        total_10_day_litres=550,
+        month=4
+    )
+
+    print("\nTEST 1: APRIL - JUNE")
+    for key, value in result.items():
+        print(key, ":", value)
+
+    # Test 2: Farmer does not qualify for bonus
+    result = calculate_payment(
+        fat=3.50,
+        snf=8.50,
+        litres=100,
+        total_10_day_litres=450,
+        month=5
+    )
+
+    print("\nTEST 2: BELOW BONUS LIMIT")
+    for key, value in result.items():
+        print(key, ":", value)
+
+    # Test 3: Exactly 500 litres
+    bonus = calculate_bonus(500)
+
+    print("\nTEST 3: EXACTLY 500 LITRES")
+    print("Bonus:", bonus)
+
+    # Test 4: More than 500 litres
+    bonus = calculate_bonus(600)
+
+    print("\nTEST 4: ABOVE 500 LITRES")
+    print("Bonus:", bonus)
+
+    # Test 5: Outside the new seasonal period
+    print("\nTEST 5: OTHER SEASON")
+    try:
+        calculate_milk_rate(4.25, 8.65, 7)
+    except ValueError as error:
+        print(error)
+
+
+# -----------------------------------------
+# G. MAIN PROGRAM
+# -----------------------------------------
+
+if __name__ == "__main__":
+    run_tests()
+
