@@ -1,1 +1,238 @@
 
+import time
+import random
+
+# ==========================================
+# Q7 - DIAGNOSE, REDESIGN AND VALIDATE
+# Milk Collection and Bonus Calculation
+# ==========================================
+
+BONUS_RATE = 0.50
+BONUS_LIMIT = 500
+
+
+# ==========================================
+# A. ORIGINAL DESIGN
+# ==========================================
+
+def original_design(farmers, deliveries):
+
+    result = {}
+    comparisons = 0
+
+    start = time.perf_counter()
+
+    # Search all deliveries separately for
+    # every farmer
+
+    for farmer in farmers:
+
+        total_litres = 0
+
+        for record in deliveries:
+
+            comparisons += 1
+
+            if record[0] == farmer:
+                total_litres += record[1]
+
+        if total_litres > BONUS_LIMIT:
+            bonus = total_litres * BONUS_RATE
+        else:
+            bonus = 0
+
+        result[farmer] = (
+            total_litres,
+            round(bonus, 2)
+        )
+
+    end = time.perf_counter()
+
+    execution_time = end - start
+
+    return result, comparisons, execution_time
+
+
+# ==========================================
+# B. REDESIGNED SOLUTION
+# ==========================================
+
+def redesigned_solution(farmers, deliveries):
+
+    result = {}
+
+    # Dictionary stores each farmer's total
+    farmer_totals = {}
+
+    comparisons = 0
+
+    start = time.perf_counter()
+
+    # Step 1: Initialize farmer totals
+
+    for farmer in farmers:
+        farmer_totals[farmer] = 0
+
+    # Step 2: Read each delivery only once
+
+    for record in deliveries:
+
+        farmer = record[0]
+        litres = record[1]
+
+        comparisons += 1
+
+        farmer_totals[farmer] += litres
+
+    # Step 3: Calculate bonus
+
+    for farmer in farmers:
+
+        total_litres = farmer_totals[farmer]
+
+        if total_litres > BONUS_LIMIT:
+            bonus = total_litres * BONUS_RATE
+        else:
+            bonus = 0
+
+        result[farmer] = (
+            total_litres,
+            round(bonus, 2)
+        )
+
+    end = time.perf_counter()
+
+    execution_time = end - start
+
+    return result, comparisons, execution_time
+
+
+# ==========================================
+# C. GENERATE TEST DATA
+# ==========================================
+
+def generate_data(number_of_farmers,
+                  records_per_farmer):
+
+    farmers = list(range(1, number_of_farmers + 1))
+
+    deliveries = []
+
+    random.seed(42)
+
+    for farmer in farmers:
+
+        for i in range(records_per_farmer):
+
+            litres = random.randint(10, 40)
+
+            deliveries.append((farmer, litres))
+
+    return farmers, deliveries
+
+
+# ==========================================
+# D. VALIDATE BOTH DESIGNS
+# ==========================================
+
+def validate_results(original, redesigned):
+
+    if original == redesigned:
+        print("\nVALIDATION: PASSED")
+        print("Both designs produce identical results.")
+    else:
+        print("\nVALIDATION: FAILED")
+        print("Results do not match.")
+
+
+# ==========================================
+# E. PERFORMANCE COMPARISON
+# ==========================================
+
+def performance_test():
+
+    print("=" * 55)
+    print("MILK COLLECTION SYSTEM - Q7")
+    print("=" * 55)
+
+    # Generate identical input for both programs
+
+    farmers, deliveries = generate_data(
+        number_of_farmers=1000,
+        records_per_farmer=20
+    )
+
+    print("\nINPUT DETAILS")
+    print("Number of farmers:", len(farmers))
+    print("Number of deliveries:", len(deliveries))
+
+    # Run original design
+
+    original, old_count, old_time = original_design(
+        farmers, deliveries
+    )
+
+    # Run redesigned solution
+
+    redesigned, new_count, new_time = redesigned_solution(
+        farmers, deliveries
+    )
+
+    # Validate outputs
+
+    validate_results(original, redesigned)
+
+    # Display performance
+
+    print("\nPERFORMANCE COMPARISON")
+    print("-" * 55)
+
+    print("Original design:")
+    print("Record comparisons:", old_count)
+    print("Execution time:", round(old_time, 6), "seconds")
+
+    print("\nRedesigned solution:")
+    print("Record comparisons:", new_count)
+    print("Execution time:", round(new_time, 6), "seconds")
+
+    # Calculate reduction in comparisons
+
+    if old_count > 0:
+
+        reduction = (
+            (old_count - new_count) / old_count
+        ) * 100
+
+        print("\nCOMPARISON REDUCTION:",
+              round(reduction, 2), "%")
+
+    if new_time > 0:
+
+        speedup = old_time / new_time
+
+        print("Measured speedup:",
+              round(speedup, 2), "times")
+
+    # Display sample farmer results
+
+    print("\nSAMPLE FARMER RESULTS")
+    print("-" * 55)
+
+    for farmer in farmers[:5]:
+
+        litres, bonus = redesigned[farmer]
+
+        print("Farmer:", farmer)
+        print("Total litres:", litres)
+        print("Bonus: Rs.", bonus)
+        print()
+
+
+# ==========================================
+# F. MAIN PROGRAM
+# ==========================================
+
+if __name__ == "__main__":
+
+    performance_test()
+
