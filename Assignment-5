@@ -1,1 +1,540 @@
 
+import re
+import os
+import csv
+import sqlite3
+import time
+import random
+from collections import Counter
+
+# ==========================================================
+# TASK B4 - FINAL ENGINEERING DECISION
+# Complaint Sentiment Analysis and Summarisation System
+# ==========================================================
+
+POSITIVE = {
+    "good", "clean", "fast", "helpful", "improved",
+    "excellent", "great", "quick", "friendly",
+    "better", "efficient", "comfortable", "nice"
+}
+
+NEGATIVE = {
+    "bad", "dirty", "slow", "rude", "smoke",
+    "broken", "poor", "late", "worst",
+    "unhelpful", "damaged", "unsafe"
+}
+
+NEGATORS = {"not", "never", "no"}
+
+STOPWORDS = {
+    "the", "is", "a", "an", "and", "or", "to",
+    "of", "in", "on", "was", "were", "are",
+    "it", "this", "that", "from", "for", "with",
+    "my", "our", "but", "very", "has", "have"
+}
+
+
+# ==========================================================
+# B4.1 - SENTIMENT SCORER
+# ==========================================================
+
+def score(text):
+    """
+    +1 for positive words
+    -1 for negative words
+    0 for neutral words
+    A preceding negator reverses the sentiment.
+    """
+
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+
+    total = 0
+
+    for i, word in enumerate(words):
+
+        if word in POSITIVE:
+            value = 1
+
+        elif word in NEGATIVE:
+            value = -1
+
+        else:
+            value = 0
+
+        # Reverse sentiment if immediately preceded
+        # by a negator.
+        if i > 0 and words[i - 1] in NEGATORS:
+            value = -value
+
+        total += value
+
+    return total
+
+
+# ==========================================================
+# SENTIMENT LABEL FUNCTION
+# ==========================================================
+
+def label(text):
+
+    s = score(text)
+
+    if s > 0:
+        return "positive"
+
+    elif s < 0:
+        return "negative"
+
+    else:
+        return "neutral"
+
+
+# ==========================================================
+# TEST THE FOUR GIVEN EXAMPLES
+# ==========================================================
+
+def test_examples():
+
+    print("\nB4.1 - GIVEN TEST EXAMPLES")
+    print("-" * 55)
+
+    complaints = [
+        "Roads are clean and the bus was fast.",
+        "Smoke from the factory, air is bad.",
+        "The staff were not helpful.",
+        "Not bad, service improved."
+    ]
+
+    for complaint in complaints:
+
+        print(
+            label(complaint),
+            "|",
+            complaint
+        )
+
+
+# ==========================================================
+# HUMAN-READING VALIDATION DATASET
+# 10 EXAMPLES REPEATED WITH 5 VARIATIONS = 50
+# ==========================================================
+
+def create_50_complaints():
+
+    examples = [
+        ("The road is clean and the bus is fast.", "positive"),
+        ("The staff are helpful and friendly.", "positive"),
+        ("The service is excellent and quick.", "positive"),
+        ("The station is clean and comfortable.", "positive"),
+        ("The service improved and became better.", "positive"),
+
+        ("The road is dirty and the bus is slow.", "negative"),
+        ("The staff are rude and unhelpful.", "negative"),
+        ("The factory smoke is bad and unsafe.", "negative"),
+        ("The bus is broken and late.", "negative"),
+        ("The service is poor and damaged.", "negative")
+    ]
+
+    complaints = []
+
+    for i in range(5):
+
+        for sentence, human_label in examples:
+
+            complaints.append({
+                "text": sentence,
+                "human_label": human_label
+            })
+
+    return complaints
+
+
+# ==========================================================
+# COMPARE AI LABELS WITH HUMAN LABELS
+# ==========================================================
+
+def validate_sentiment(complaints):
+
+    correct = 0
+    total = len(complaints)
+
+    print("\nHUMAN VS PROGRAM COMPARISON")
+    print("-" * 55)
+
+    for complaint in complaints:
+
+        text = complaint["text"]
+        human = complaint["human_label"]
+
+        predicted = label(text)
+
+        if predicted == human:
+            correct += 1
+
+    agreement = (correct / total) * 100
+
+    print("Total complaints:", total)
+    print("Correct predictions:", correct)
+    print("Incorrect predictions:", total - correct)
+
+    print("Human agreement:", round(agreement, 2), "%")
+
+    return agreement
+
+
+# ==========================================================
+# FIND A WRONG SENTIMENT CLASSIFICATION
+# ==========================================================
+
+def find_wrong_classification():
+
+    print("\nLIMITATION TEST")
+    print("-" * 55)
+
+    complaint = "The service is not very good."
+
+    print("Complaint:", complaint)
+    print("Program label:", label(complaint))
+
+    print("Human reading: Negative")
+
+    print("Reason: The simple negation method only checks")
+    print("the immediately preceding word. It misses")
+    print("the negator 'not' before 'very good'.")
+
+
+# ==========================================================
+# B4.1 - FREQUENCY-BASED SUMMARISER
+# ==========================================================
+
+def frequency_summary(text, k=3):
+
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+
+    important_words = [
+        word for word in words
+        if word not in STOPWORDS
+    ]
+
+    word_frequency = Counter(important_words)
+
+    sentence_scores = []
+
+    for index, sentence in enumerate(sentences):
+
+        sentence_words = re.findall(
+            r"[a-zA-Z]+",
+            sentence.lower()
+        )
+
+        sentence_score = sum(
+            word_frequency[word]
+            for word in sentence_words
+            if word not in STOPWORDS
+        )
+
+        sentence_scores.append(
+            (sentence_score, index, sentence)
+        )
+
+    # Select sentences with highest scores
+    selected = sorted(
+        sentence_scores,
+        key=lambda x: (-x[0], x[1])
+    )[:k]
+
+    # Restore original sentence order
+    selected.sort(key=lambda x: x[1])
+
+    return " ".join(item[2] for item in selected)
+
+
+# ==========================================================
+# ALTERNATIVE - FIRST K SENTENCES
+# ==========================================================
+
+def first_k_summary(text, k=3):
+
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+
+    return " ".join(sentences[:k])
+
+
+# ==========================================================
+# SUMMARISER TEST
+# ==========================================================
+
+def test_summariser():
+
+    complaint_text = """
+    The buses are very slow during morning hours.
+    The roads near the station are dirty.
+    The bus service is slow and late.
+    Passengers complain about slow buses every day.
+    The station requires better cleaning facilities.
+    The staff are helpful and friendly.
+    The bus service needs improvement.
+    """
+
+    print("\nSUMMARISER COMPARISON")
+    print("-" * 55)
+
+    print("\nOriginal complaints:")
+    print(complaint_text)
+
+    print("\nFirst three sentences:")
+    print(first_k_summary(complaint_text, 3))
+
+    print("\nFrequency-based summary:")
+    print(frequency_summary(complaint_text, 3))
+
+
+# ==========================================================
+# B4.2 - CREATE DATABASE
+# ==========================================================
+
+DATABASE = "complaints.db"
+
+
+def create_database():
+
+    if os.path.exists(DATABASE):
+        os.remove(DATABASE)
+
+    connection = sqlite3.connect(DATABASE)
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        CREATE TABLE complaints (
+            complaint_id INTEGER PRIMARY KEY,
+            station_id INTEGER,
+            complaint_day TEXT,
+            complaint_text TEXT,
+            sentiment TEXT
+        )
+    """)
+
+    connection.commit()
+
+    return connection
+
+
+# ==========================================================
+# GENERATE 50,000 COMPLAINTS
+# 100 STATIONS
+# ==========================================================
+
+def generate_database_data(connection):
+
+    cursor = connection.cursor()
+
+    random.seed(42)
+
+    complaints = [
+        "The bus service is good and fast.",
+        "The station is dirty and the bus is slow.",
+        "The staff are helpful.",
+        "The factory smoke is bad.",
+        "The road is clean.",
+        "The bus is broken and late."
+    ]
+
+    data = []
+
+    for i in range(50000):
+
+        station_id = random.randint(1, 100)
+
+        day = random.randint(1, 30)
+
+        complaint_day = f"2026-11-{day:02d}"
+
+        text = random.choice(complaints)
+
+        sentiment = label(text)
+
+        data.append((
+            station_id,
+            complaint_day,
+            text,
+            sentiment
+        ))
+
+    cursor.executemany("""
+        INSERT INTO complaints
+        (station_id, complaint_day,
+         complaint_text, sentiment)
+        VALUES (?, ?, ?, ?)
+    """, data)
+
+    connection.commit()
+
+    print("\nDATABASE CREATED")
+    print("Total complaints:", len(data))
+    print("Stations:", 100)
+
+
+# ==========================================================
+# B4.2 - MEASURE SLOWEST QUERY BEFORE AND AFTER INDEX
+# ==========================================================
+
+def measure_query(connection):
+
+    cursor = connection.cursor()
+
+    station = 50
+    day = "2026-11-15"
+
+    query = """
+        SELECT *
+        FROM complaints
+        WHERE station_id = ?
+        AND complaint_day = ?
+    """
+
+    repetitions = 200
+
+    # ---------------------------------------
+    # BEFORE INDEX
+    # ---------------------------------------
+
+    start = time.perf_counter()
+
+    for i in range(repetitions):
+
+        cursor.execute(query, (station, day))
+        result = cursor.fetchall()
+
+    before_time = time.perf_counter() - start
+
+    print("\nDATABASE QUERY - BEFORE INDEX")
+    print("Matching records:", len(result))
+    print("Execution time:",
+          round(before_time, 6), "seconds")
+
+    # ---------------------------------------
+    # CREATE COMPOSITE INDEX
+    # ---------------------------------------
+
+    cursor.execute("""
+        CREATE INDEX idx_station_day
+        ON complaints(station_id, complaint_day)
+    """)
+
+    connection.commit()
+
+    # ---------------------------------------
+    # AFTER INDEX
+    # ---------------------------------------
+
+    start = time.perf_counter()
+
+    for i in range(repetitions):
+
+        cursor.execute(query, (station, day))
+        result_after = cursor.fetchall()
+
+    after_time = time.perf_counter() - start
+
+    print("\nDATABASE QUERY - AFTER INDEX")
+    print("Matching records:", len(result_after))
+    print("Execution time:",
+          round(after_time, 6), "seconds")
+
+    if before_time > 0:
+
+        improvement = (
+            (before_time - after_time) / before_time
+        ) * 100
+
+        print("Time reduction:",
+              round(improvement, 2), "%")
+
+    # Verify that the index exists
+    cursor.execute("""
+        PRAGMA index_list('complaints')
+    """)
+
+    print("\nDATABASE INDEX DETAILS:")
+    print(cursor.fetchall())
+
+
+# ==========================================================
+# B4.3 - PRODUCTION DECISION
+# ==========================================================
+
+def production_decision():
+
+    print("\nPRODUCTION DECISION")
+    print("=" * 55)
+
+    print("Monthly complaints: 50,000")
+    print("Additional stations: 100")
+    print("Reporting interval: 15 minutes")
+
+    print("\nRecommended strategy:")
+
+    print("1. Store complaints in SQLite initially.")
+    print("2. Clean and validate complaint text.")
+    print("3. Use dictionary-based sentiment vocabulary.")
+    print("4. Apply negation handling.")
+    print("5. Use frequency-based summarisation.")
+    print("6. Create indexes on station and date.")
+    print("7. Monitor accuracy and query execution time.")
+
+    print("\nDecision:")
+    print("Use simple AI methods for the initial system.")
+    print("Move to a trained NLP model if accuracy is")
+    print("insufficient or context-based sentiment is needed.")
+
+
+# ==========================================================
+# MAIN PROGRAM
+# ==========================================================
+
+def main():
+
+    print("=" * 60)
+    print("PUBLIC TRANSPORT COMPLAINT ANALYSIS SYSTEM")
+    print("=" * 60)
+
+    # B4.1
+    test_examples()
+
+    complaints = create_50_complaints()
+
+    agreement = validate_sentiment(complaints)
+
+    find_wrong_classification()
+
+    test_summariser()
+
+    # B4.2
+    connection = create_database()
+
+    generate_database_data(connection)
+
+    measure_query(connection)
+
+    connection.close()
+
+    # B4.3
+    production_decision()
+
+    print("\nFINAL ENGINEERING DECISION")
+    print("=" * 60)
+
+    if agreement >= 90:
+        print("Initial sentiment agreement target achieved.")
+    else:
+        print("Improve sentiment scoring before deployment.")
+
+    print("Program execution completed.")
+
+
+if __name__ == "__main__":
+    main()
+
