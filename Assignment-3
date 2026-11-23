@@ -1,1 +1,311 @@
 
+import time
+import random
+import string
+
+# ==================================================
+# Q7 - CONTACT MERGING PROGRAM
+# ==================================================
+
+# STAGE 1: NORMALISATION
+# ==================================================
+
+def normalize_number(number):
+
+    if not number:
+        return ""
+
+    # Keep only digits
+    digits = ""
+
+    for char in number:
+        if char.isdigit():
+            digits += char
+
+    # Remove Indian country code 91
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+
+    return digits
+
+
+def normalize_name(name):
+
+    if not name:
+        return ""
+
+    # Convert to lowercase and remove extra spaces
+    return " ".join(name.lower().split())
+
+
+def normalize_email(email):
+
+    if not email:
+        return ""
+
+    return email.strip().lower()
+
+
+# ==================================================
+# STAGE 2: DICTIONARY-BASED CONTACT MERGING
+# ==================================================
+
+def merge_contacts(contact_lists):
+
+    merged = {}
+
+    for contact_list in contact_lists:
+
+        for contact in contact_list:
+
+            name = contact.get("name", "").strip()
+            number = normalize_number(
+                contact.get("phone", "")
+            )
+            email = normalize_email(
+                contact.get("email", "")
+            )
+
+            # Ignore contacts without phone numbers
+            if not number:
+                continue
+
+            # Dictionary key is normalized phone number
+            if number not in merged:
+
+                merged[number] = {
+                    "name": set(),
+                    "numbers": set(),
+                    "emails": set()
+                }
+
+            # Add information without duplication
+            if name:
+                merged[number]["name"].add(name)
+
+            if number:
+                merged[number]["numbers"].add(number)
+
+            if email:
+                merged[number]["emails"].add(email)
+
+    return merged
+
+
+# ==================================================
+# STAGE 3: ORIGINAL PAIRWISE COMPARISON
+# ==================================================
+
+def pairwise_merge(contact_lists):
+
+    contacts = []
+
+    for contact_list in contact_lists:
+        contacts.extend(contact_list)
+
+    groups = []
+    comparisons = 0
+
+    for contact in contacts:
+
+        number = normalize_number(
+            contact.get("phone", "")
+        )
+
+        if not number:
+            continue
+
+        found = False
+
+        for group in groups:
+
+            comparisons += 1
+
+            if number in group["numbers"]:
+
+                name = contact.get("name", "").strip()
+                email = normalize_email(
+                    contact.get("email", "")
+                )
+
+                if name:
+                    group["name"].add(name)
+
+                if email:
+                    group["emails"].add(email)
+
+                group["numbers"].add(number)
+
+                found = True
+                break
+
+        if not found:
+
+            name = contact.get("name", "").strip()
+            email = normalize_email(
+                contact.get("email", "")
+            )
+
+            groups.append({
+                "name": {name} if name else set(),
+                "numbers": {number},
+                "emails": {email} if email else set()
+            })
+
+    return groups, comparisons
+
+
+# ==================================================
+# STAGE 4: DISPLAY MERGED CONTACTS
+# ==================================================
+
+def display_contacts(merged):
+
+    print("\nMERGED CONTACTS")
+    print("=" * 50)
+
+    for number, details in merged.items():
+
+        print("Names:", sorted(details["name"]))
+        print("Phone numbers:", sorted(details["numbers"]))
+        print("Emails:", sorted(details["emails"]))
+        print("-" * 50)
+
+
+# ==================================================
+# STAGE 5: TESTING WITH SAMPLE CONTACTS
+# ==================================================
+
+def sample_test():
+
+    phone1 = [
+        {
+            "name": "Dr. Ravi",
+            "phone": "+91 98400 12345",
+            "email": "ravi@gmail.com"
+        },
+        {
+            "name": "Anand",
+            "phone": "9876543210",
+            "email": "anand@gmail.com"
+        }
+    ]
+
+    phone2 = [
+        {
+            "name": "ravi kumar",
+            "phone": "9840012345",
+            "email": "RAVI@GMAIL.COM"
+        },
+        {
+            "name": "Priya",
+            "phone": "9123456780",
+            "email": "priya@gmail.com"
+        }
+    ]
+
+    sim_contacts = [
+        {
+            "name": "Ravi",
+            "phone": "98400-12345",
+            "email": "ravi.work@gmail.com"
+        },
+        {
+            "name": "Kumar",
+            "phone": "",
+            "email": "kumar@gmail.com"
+        }
+    ]
+
+    all_lists = [phone1, phone2, sim_contacts]
+
+    merged = merge_contacts(all_lists)
+
+    display_contacts(merged)
+
+    # Verify against manually expected groups
+    assert len(merged) == 3
+    assert "9840012345" in merged
+    assert len(merged["9840012345"]["name"]) == 3
+    assert len(merged["9840012345"]["emails"]) == 2
+
+    print("\nSMALL DATA VALIDATION: PASSED")
+
+
+# ==================================================
+# STAGE 6: GENERATE LARGE TEST DATA
+# ==================================================
+
+def generate_contacts(total):
+
+    contacts = []
+
+    for i in range(total):
+
+        contacts.append({
+            "name": "Person " + str(i),
+            "phone": str(9000000000 + i),
+            "email": "person" + str(i) + "@gmail.com"
+        })
+
+    return contacts
+
+
+# ==================================================
+# STAGE 7: PERFORMANCE MEASUREMENT
+# ==================================================
+
+def performance_test():
+
+    print("\nPERFORMANCE TEST")
+    print("=" * 50)
+
+    for size in [1000, 100000]:
+
+        contacts = generate_contacts(size)
+
+        # Dictionary method
+        start = time.perf_counter()
+
+        dictionary_result = merge_contacts([contacts])
+
+        dictionary_time = time.perf_counter() - start
+
+        # Pairwise method
+        start = time.perf_counter()
+
+        pairwise_result, comparisons = pairwise_merge(
+            [contacts]
+        )
+
+        pairwise_time = time.perf_counter() - start
+
+        print("\nCONTACTS:", size)
+
+        print("Dictionary method:")
+        print("Groups:", len(dictionary_result))
+        print("Time:", round(dictionary_time, 6), "seconds")
+
+        print("\nPairwise method:")
+        print("Groups:", len(pairwise_result))
+        print("Comparisons:", comparisons)
+        print("Time:", round(pairwise_time, 6), "seconds")
+
+        print("\nRESULT VALIDATION:",
+              len(dictionary_result) == len(pairwise_result))
+
+        print("-" * 50)
+
+
+# ==================================================
+# STAGE 8: MAIN PROGRAM
+# ==================================================
+
+if __name__ == "__main__":
+
+    print("CONTACT MERGING SYSTEM")
+
+    sample_test()
+
+    performance_test()
+
